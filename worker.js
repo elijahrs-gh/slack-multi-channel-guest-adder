@@ -6,6 +6,8 @@ const CLIENT_SECRET        = '';
 const REDIRECT_URI         = '';
 
 const SLACK_SIGNING_SECRET = '';
+
+// This is the channel that the command will add you too.
 const TARGET_CHANNEL       = '';
 const JSON_HEADERS         = { 'Content-Type': 'application/json' };
 
@@ -57,7 +59,7 @@ async function handleSlash(request) {
 
   const text      = new URLSearchParams(body).get('text')?.trim() || '';
   if (!text) {
-    return json({ text: 'Usage: /identity-add @username' });
+    return json({ text: 'Usage: /add @username' });
   }
 
   const mentionRx = /^<@([UW][A-Z0-9]+)(?:\|[^>]+)?>$/;
