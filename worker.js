@@ -11,6 +11,11 @@ const SLACK_SIGNING_SECRET = '';
 const TARGET_CHANNEL       = '';
 const JSON_HEADERS         = { 'Content-Type': 'application/json' };
 
+// Add in the Slack ID's of users who have access to the command here.
+const APPROVED_USERS = new Set([
+  'SLACK_ID_HERE'
+]);
+
 const tokenStore = { bot: null, user: null };
 
 export default {
@@ -57,15 +62,26 @@ async function handleSlash(request) {
     return new Response('Invalid signature', { status: 400 });
   }
 
-  const text      = new URLSearchParams(body).get('text')?.trim() || '';
+  const params      = new URLSearchParams(body);
+  const invokingUser = params.get('user_id');
+  if (!APPROVED_USERS.has(invokingUser)) {
+    return json({
+      response_type: 'ephemeral',
+      text: '⛔ You’re not authorized to use this command.'
+    });
+  }
+
+  const text      = params.get('text')?.trim() || '';
   if (!text) {
-    return json({ text: 'Usage: /add @username' });
+    return json({ text: 'Usage: /identity-add @username' });
   }
 
   const mentionRx = /^<@([UW][A-Z0-9]+)(?:\|[^>]+)?>$/;
   const m         = text.match(mentionRx);
   let userId      = m ? m[1] : null;
-  if (!userId && /^[UW][A-Z0-9]+$/.test(text)) userId = text;
+  if (!userId && /^[UW][A-Z0-9]+$/.test(text)) {
+    userId = text;
+  }
   if (!userId) {
     return json({ text: '⚠️ Please mention exactly one user.' });
   }
@@ -79,7 +95,7 @@ async function handleSlash(request) {
 }
 
 async function slackApi(method, payload = {}, type = 'bot') {
-  const url   = `https://slack.com/api/${method}`;
+  const url    = `https://slack.com/api/${method}`;
   const manual = (type === 'bot' ? BOT_TOKEN : USER_TOKEN).trim();
   const store  = type === 'bot' ? tokenStore.bot : tokenStore.user;
   const token  = manual || store;
@@ -101,9 +117,17 @@ function json(body) {
 
 async function verifySlackSignature(timestamp, body, signature) {
   const encoder = new TextEncoder();
-  const key     = await crypto.subtle.importKey('raw', encoder.encode(SLACK_SIGNING_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const base    = `v0:${timestamp}:${body}`;
-  const sigBuf  = await crypto.subtle.sign('HMAC', key, encoder.encode(base));
-  const hash    = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const key     = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(SLACK_SIGNING_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const base   = `v0:${timestamp}:${body}`;
+  const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(base));
+  const hash   = Array.from(new Uint8Array(sigBuf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
   return signature === `v0=${hash}`;
 }
